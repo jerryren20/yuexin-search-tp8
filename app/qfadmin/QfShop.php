@@ -35,7 +35,9 @@ abstract class QfShop
     protected $action;
 
     //模型
-    protected $AdminModel;
+    // Keep the property name aligned with the lowercase usage in initialize()
+    // and access(). PHP 8.2+ treats undeclared dynamic properties as deprecated.
+    protected $adminModel;
     protected $accessModel;
     protected $authModel;
     protected $nodeModel;
