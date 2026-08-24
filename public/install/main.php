@@ -4,13 +4,13 @@ if(empty($_POST['manager']) || empty($_POST['manager_pwd'])) {
 	return array('status'=>0,'info'=>'管理员账号或密码不能为空！请检查表单数据。');
 }
 
-$username = trim($_POST['manager']);
-$password = trim($_POST['manager_pwd']);
+$username = trim((string) ($_POST['manager'] ?? ''));
+$password = trim((string) ($_POST['manager_pwd'] ?? ''));
 //网站名称
-$site_name = addslashes(trim($_POST['sitename']));
+$site_name = addslashes(trim((string) ($_POST['sitename'] ?? '')));
 
 // 调试信息：检查数据库连接
-if(!isset($mysqli) || $mysqli->connect_error) {
+if(!isset($mysqli) || !($mysqli instanceof mysqli) || $mysqli->connect_error) {
 	return array('status'=>0,'info'=>'数据库连接不可用：' . (isset($mysqli) ? $mysqli->connect_error : '数据库连接对象不存在'));
 }
 
@@ -21,7 +21,7 @@ if(!$mysqli->query("UPDATE `{$dbPrefix}conf` SET  `conf_value` = '$site_name' WH
 
 if(INSTALLTYPE == 'HOST'){
 	        $db_str=<<<php
-APP_DEBUG = true
+APP_DEBUG = false
 SYSTEM_SALT= {$site_name}
 
 [APP]

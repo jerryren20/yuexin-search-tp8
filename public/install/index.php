@@ -29,8 +29,16 @@ error_reporting(E_ALL & ~E_NOTICE);
 
 function install_create_mysqli($dbHost, $dbUser, $dbPwd)
 {
-	$mysqli = @new mysqli($dbHost, $dbUser, $dbPwd);
-	return $mysqli;
+	// PHP 8 默认可能将连接失败升级为 mysqli_sql_exception；安装器需要
+	// 把它转换为可处理的连接错误，不能让异常污染页面或 AJAX JSON。
+	$previousReportMode = mysqli_report(MYSQLI_REPORT_OFF);
+	try {
+		return @new mysqli($dbHost, $dbUser, $dbPwd);
+	} catch (Throwable $e) {
+		return null;
+	} finally {
+		mysqli_report($previousReportMode);
+	}
 }
 
 function install_format_db_connect_error($mysqli)
@@ -129,7 +137,7 @@ switch ($step) {
 			$dbHost = $_POST['dbhost'] . ':' . $_POST['dbport'];
 			$mysqli = install_create_mysqli($dbHost,  $_POST['dbuser'], $_POST['dbpw']);
 			// 改进错误检查机制
-			if($mysqli->connect_error)  {
+			if(!$mysqli || $mysqli->connect_error)  {
 				alert(0, install_format_db_connect_error($mysqli), 'dbpw');
 			}else{
 				// 测试数据库版本
@@ -179,7 +187,10 @@ switch ($step) {
 			}
 		}
 		verify(4);
-		if (intval($_GET['install'])) {
+		// 第一次进入第 4 步时，表单会提交到 step=4，但不会带 install 参数。
+		// 使用默认值，避免 PHP 8 将未定义数组键报告为 Warning。
+		$install = isset($_GET['install']) ? (int) $_GET['install'] : 0;
+		if ($install > 0) {
 			dataVerify();
 			//关闭特殊字符提交处理到数据库
 			//设置时区
@@ -193,27 +204,25 @@ switch ($step) {
 			ob_implicit_flush(true);
 			ob_end_flush();
 			//当前进行的数据库操作
-			$n = intval($_GET['n']);
+			$n = isset($_GET['n']) ? max(0, (int) $_GET['n']) : 0;
 			$arr = array();
 			//数据库服务器地址
-			$dbHost = trim($_POST['dbhost']);
+			$dbHost = trim((string) ($_POST['dbhost'] ?? ''));
 			//数据库端口
-			$dbPort = trim($_POST['dbport']);
+			$dbPort = trim((string) ($_POST['dbport'] ?? ''));
 			//数据库名
-			$dbName = trim($_POST['dbname']);
+			$dbName = trim((string) ($_POST['dbname'] ?? ''));
 			$dbHost = empty($dbPort) || $dbPort == 3306 ? $dbHost : $dbHost . ':' . $dbPort;
 			//数据库用户名
-			$dbUser = trim($_POST['dbuser']);
+			$dbUser = trim((string) ($_POST['dbuser'] ?? ''));
 			//数据库密码
-			$dbPwd = trim($_POST['dbpw']);
+			$dbPwd = trim((string) ($_POST['dbpw'] ?? ''));
 			//表前缀
-			$dbPrefix = empty($_POST['dbprefix']) ? 'db_' : trim($_POST['dbprefix']);
+			$dbPrefix = empty($_POST['dbprefix']) ? 'db_' : trim((string) $_POST['dbprefix']);
 			//链接数据库
 			$mysqli = install_create_mysqli($dbHost, $dbUser, $dbPwd);
-			//导入政采商品
-			$sitegoods = trim($_POST['sitegoods']);
 			// 改进数据库连接错误检查
-			if ($mysqli->connect_error) {
+			if (!$mysqli || $mysqli->connect_error) {
 				alert(0, install_format_db_connect_error($mysqli));
 			}
 			
