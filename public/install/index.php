@@ -222,6 +222,12 @@ switch ($step) {
 			$dbPrefix = empty($_POST['dbprefix'])
 				? trim((string) ($config['dbPrefix'] ?? 'qf_'))
 				: trim((string) $_POST['dbprefix']);
+			if (!install_is_identifier($dbName)) {
+				alert(0, '数据库名格式不正确，请仅使用字母、数字和下划线');
+			}
+			if (!install_is_identifier($dbPrefix)) {
+				alert(0, '数据库表前缀格式不正确，请仅使用字母、数字和下划线');
+			}
 			//链接数据库
 			$mysqli = install_create_mysqli($mysqliHost, $dbUser, $dbPwd);
 			// 改进数据库连接错误检查
@@ -368,6 +374,12 @@ function dataVerify(){
 	empty($_POST['dbprefix'])?alert(0,'数据库表前缀不能为空！'):'';
 	empty($_POST['manager'])?alert(0,'管理员帐号不能为空！'):'';
 	empty($_POST['manager_pwd'])?alert(0,'管理员密码不能为空！'):'';
+}
+/**
+ * Validate values that will be used as MySQL identifiers.
+ */
+function install_is_identifier($value) {
+	return preg_match('/^[A-Za-z0-9_]+$/D', (string) $value) === 1;
 }
 /**
  * 判断目录是否可写

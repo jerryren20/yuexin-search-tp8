@@ -2,8 +2,9 @@
 
 /**
  * Write an installer-generated file without exposing credentials in output.
- * Linux uses an atomic rename; Windows falls back to replacing the target
- * because rename() cannot overwrite an existing file on all PHP builds.
+ * Linux uses an atomic rename. Windows cannot overwrite an existing file with
+ * rename() on all PHP builds, so it uses a backup/restore replacement path
+ * that never discards the previous file when the replacement fails.
  */
 function install_write_file($path, $content)
 {
@@ -29,11 +30,28 @@ function install_write_file($path, $content)
 			}
 		}
 
-		if (PHP_OS_FAMILY === 'Windows' && is_file($path)) {
-			@unlink($path);
+		if (PHP_OS_FAMILY !== 'Windows' || !is_file($path)) {
+			return @rename($tmp, $path);
 		}
 
-		return @rename($tmp, $path);
+		$backup = tempnam($directory, '.install-backup-');
+		if ($backup === false) {
+			return false;
+		}
+		@unlink($backup);
+
+		if (!@rename($path, $backup)) {
+			return false;
+		}
+
+		if (@rename($tmp, $path)) {
+			@unlink($backup);
+			return true;
+		}
+
+		// Restore the previous configuration if the replacement failed.
+		@rename($backup, $path);
+		return false;
 	} finally {
 		if (is_file($tmp)) {
 			@unlink($tmp);
@@ -88,9 +106,10 @@ function install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbP
 
 function install_env_content($siteName)
 {
-	$siteName = preg_replace('/[\r\n]+/', ' ', (string) $siteName);
+	// SYSTEM_SALT is a cryptographic secret, not a copy of the visible site name.
+	$systemSalt = bin2hex(random_bytes(32));
 	return "APP_DEBUG = false\n"
-		. "SYSTEM_SALT = " . $siteName . "\n\n"
+		. "SYSTEM_SALT = " . $systemSalt . "\n\n"
 		. "[APP]\n"
 		. "DEFAULT_TIMEZONE = Asia/Chongqing\n\n"
 		. "[LANG]\n"
@@ -125,21 +144,6 @@ if(!isset($mysqli) || !($mysqli instanceof mysqli) || $mysqli->connect_error) {
 $site_name_sql = $mysqli->real_escape_string($site_name);
 if(!$mysqli->query("UPDATE `{$dbPrefix}conf` SET  `conf_value` = '$site_name_sql' WHERE conf_key='app_name'")){
 	return array('status'=>0,'info'=>'更新网站名称配置失败：' . $mysqli->error);
-}
-
-if(INSTALLTYPE == 'HOST'){
-	$projectRoot = dirname(__DIR__, 2);
-	$databaseConfigPath = $projectRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'database.php';
-	$envPath = $projectRoot . DIRECTORY_SEPARATOR . '.env';
-
-	// 数据库连接信息写入 config/database.php，.env 仅保留非数据库配置。
-	$databaseConfig = install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix);
-	if (!install_write_file($databaseConfigPath, $databaseConfig)) {
-		return array('status'=>0,'info'=>'写入 config/database.php 失败，请检查 config 目录权限');
-	}
-	if (!install_write_file($envPath, install_env_content($site_name))) {
-		return array('status'=>0,'info'=>'写入 .env 失败，请检查项目根目录权限');
-	}
 }
 
 //插入管理员
@@ -177,6 +181,21 @@ $checkStatement->fetch();
 $checkStatement->close();
 if ((int)$checkCount === 0) {
 	return array('status'=>0,'info'=>'管理员账户插入失败：数据未成功写入数据库');
+}
+
+if(INSTALLTYPE == 'HOST'){
+	$projectRoot = dirname(__DIR__, 2);
+	$databaseConfigPath = $projectRoot . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'database.php';
+	$envPath = $projectRoot . DIRECTORY_SEPARATOR . '.env';
+
+	// 数据库连接信息只在数据库和管理员创建成功后写入，.env 仅保留非数据库配置。
+	$databaseConfig = install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix);
+	if (!install_write_file($databaseConfigPath, $databaseConfig)) {
+		return array('status'=>0,'info'=>'写入 config/database.php 失败，请检查 config 目录权限');
+	}
+	if (!install_write_file($envPath, install_env_content($site_name))) {
+		return array('status'=>0,'info'=>'写入 .env 失败，请检查项目根目录权限');
+	}
 }
 
 $mysqli->close();
