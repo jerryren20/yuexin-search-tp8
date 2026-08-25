@@ -9,7 +9,7 @@
  */
 function jok($message = 'success', $data = null)
 {
-    header("content-type:application/json;chartset=uft-8");
+    header("Content-Type: application/json; charset=utf-8");
     if ($data) {
         echo json_encode(["code" => 200, "message" => $message, 'data' => $data]);
     } else {
@@ -34,7 +34,7 @@ function jok2($message = 'success', $data = null)
  */
 function jerr($message = 'error', $code = 500)
 {
-    header("content-type:application/json;chartset=uft-8");
+    header("Content-Type: application/json; charset=utf-8");
     echo json_encode(["code" => $code, "message" => $message]);
     die;
 }

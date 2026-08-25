@@ -212,15 +212,18 @@ switch ($step) {
 			$dbPort = trim((string) ($_POST['dbport'] ?? ''));
 			//数据库名
 			$dbName = trim((string) ($_POST['dbname'] ?? ''));
-			$dbHost = empty($dbPort) || $dbPort == 3306 ? $dbHost : $dbHost . ':' . $dbPort;
+			// 保留不带端口的主机名，mysqli 使用单独的连接地址变量。
+			$mysqliHost = empty($dbPort) || $dbPort == 3306 ? $dbHost : $dbHost . ':' . $dbPort;
 			//数据库用户名
 			$dbUser = trim((string) ($_POST['dbuser'] ?? ''));
 			//数据库密码
 			$dbPwd = trim((string) ($_POST['dbpw'] ?? ''));
 			//表前缀
-			$dbPrefix = empty($_POST['dbprefix']) ? 'db_' : trim((string) $_POST['dbprefix']);
+			$dbPrefix = empty($_POST['dbprefix'])
+				? trim((string) ($config['dbPrefix'] ?? 'qf_'))
+				: trim((string) $_POST['dbprefix']);
 			//链接数据库
-			$mysqli = install_create_mysqli($dbHost, $dbUser, $dbPwd);
+			$mysqli = install_create_mysqli($mysqliHost, $dbUser, $dbPwd);
 			// 改进数据库连接错误检查
 			if (!$mysqli || $mysqli->connect_error) {
 				alert(0, install_format_db_connect_error($mysqli));

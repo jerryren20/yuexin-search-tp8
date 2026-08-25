@@ -26,15 +26,25 @@ class System extends QfShop
         // if ($error) {
         //     return $error;
         // }
-        $validateModel = new ValidateModel();
-        $imgData = $validateModel->getImg();
-        $code = strtoupper($validateModel->getCode());
-        $token = sha1($code .  time()) . rand(100000, 999999);
-        cache($token, $code, 60);
-        return jok('验证码生成成功', [
-            'img' => $imgData,
-            'token' => $token
-        ]);
+        try {
+            $validateModel = new ValidateModel();
+            $imgData = $validateModel->getImg();
+            $code = strtoupper($validateModel->getCode());
+            if ($code === '' || $imgData === '') {
+                throw new \RuntimeException('验证码内容为空');
+            }
+
+            $token = sha1($code . time() . random_int(100000, 999999)) . random_int(100000, 999999);
+            cache($token, $code, 60);
+            return jok('验证码生成成功', [
+                'img' => $imgData,
+                'token' => $token
+            ]);
+        } catch (\Throwable $e) {
+            // 只记录阶段和异常消息，不把验证码、Cookie 或请求内容返回给客户端。
+            \think\facade\Log::error('后台验证码生成失败: ' . $e->getMessage());
+            return jerr('验证码生成失败，请稍后重试', 500);
+        }
     }
     /**
      * 清除缓存

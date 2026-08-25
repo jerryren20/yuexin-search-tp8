@@ -1,8 +1,9 @@
 <?php
 
 return [
-    // 默认使用的数据库连接配置
-    'default'         => env('database.driver', 'mysql'),
+    // 默认使用的数据库连接配置。
+    // 安装器会把实际连接信息写入本文件；不要把生产密码提交到代码仓库。
+    'default'         => 'mysql',
 
     // 自定义时间查询规则
     'time_query_rule' => [],
@@ -19,23 +20,23 @@ return [
     'connections'     => [
         'mysql' => [
             // 数据库类型
-            'type'              => env('database.type', 'mysql'),
+            'type'              => 'mysql',
             // 服务器地址
-            'hostname'          => env('database.hostname', '127.0.0.1'),
+            'hostname'          => '127.0.0.1',
             // 数据库名
-            'database'          => env('database.database', ''),
+            'database'          => 'yuexin_search',
             // 用户名
-            'username'          => env('database.username', 'root'),
+            'username'          => 'root',
             // 密码
-            'password'          => env('database.password', ''),
+            'password'          => '',
             // 端口
-            'hostport'          => env('database.hostport', '3306'),
+            'hostport'          => '3306',
             // 数据库连接参数
             'params'            => [],
             // 数据库编码默认采用utf8
-            'charset'           => env('database.charset', 'utf8'),
+            'charset'           => 'utf8mb4',
             // 数据库表前缀
-            'prefix'            => env('database.prefix', ''),
+            'prefix'            => 'qf_',
 
             // 数据库部署方式:0 集中式(单一服务器),1 分布式(主从服务器)
             'deploy'            => 0,
@@ -50,7 +51,7 @@ return [
             // 是否需要断线重连
             'break_reconnect'   => false,
             // 监听SQL
-            'trigger_sql'       => env('app_debug', true),
+            'trigger_sql'       => false,
             // 开启字段缓存
             'fields_cache'      => false,
             // 字段缓存路径

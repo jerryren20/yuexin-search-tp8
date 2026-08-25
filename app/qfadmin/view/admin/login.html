@@ -100,6 +100,15 @@
             width: 100px;
             height: 38px;
         }
+        .login-captcha-error {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 270px;
+            margin: -12px 0 16px;
+            color: #f56c6c;
+            font-size: 12px;
+        }
     </style>
 </head>
 
@@ -130,21 +139,26 @@
                                     <i slot="prefix" class="el-icon-key"></i>
                                 </el-input>
                             </el-form-item>
-                            <el-form-item v-if="codeUrl" prop="admin_code">
+                            <el-form-item v-if="codeUrl || captchaLoading || captchaError" prop="admin_code">
                                 <el-row :span="34">
                                     <el-col :span="14">
                                         <el-input @keyup.enter.native="handleLogin()" v-model="loginForm.admin_code"
-                                            auto-complete="off" placeholder="请输入验证码">
+                                            :disabled="captchaLoading || !codeUrl" auto-complete="off" placeholder="请输入验证码">
                                             <i slot="prefix" class="el-icon-mobile"></i>
                                         </el-input>
                                     </el-col>
                                     <el-col :span="10">
                                         <div class="login-code">
-                                            <img :src="codeUrl" class="login-code-img" @click="getCaptcha" alt="" />
+                                            <img v-if="codeUrl" :src="codeUrl" class="login-code-img" @click="getCaptcha" alt="点击刷新验证码" />
+                                            <el-button v-else size="mini" type="text" :loading="captchaLoading" @click="getCaptcha">重新获取</el-button>
                                         </div>
                                     </el-col>
                                 </el-row>
                             </el-form-item>
+                            <div v-if="captchaError" class="login-captcha-error">
+                                <span>{{ captchaError }}</span>
+                                <el-button size="mini" type="text" @click="getCaptcha">重试</el-button>
+                            </div>
                             <el-form-item>
                                 <el-button type="primary" :loading="loading" @click.native.prevent="handleLogin"
                                     class="login-submit">登 录
@@ -168,6 +182,8 @@
             return {
                 codeUrl: '',
                 codeToken: '',
+                captchaLoading: false,
+                captchaError: '',
                 loading: false,
                 loginForm: {
                     admin_account: '',
@@ -198,6 +214,11 @@
              */
             handleLogin() {
                 var that = this;
+                if (!this.codeUrl || !this.codeToken) {
+                    this.captchaError = '验证码尚未加载，请先重试';
+                    this.getCaptcha();
+                    return;
+                }
                 this.$refs.loginForm.validate(valid => {
                     if (valid) {
                         this.loading = true
@@ -247,13 +268,25 @@
             },
             getCaptcha() {
                 var that = this;
+                this.captchaLoading = true;
+                this.captchaError = '';
+                this.codeUrl = '';
+                this.codeToken = '';
                 axios.post('/admin/system/getCaptcha', Object.assign({}, PostBase))
                     .then(function (res) {
-                        that.codeUrl = res.data.data.img
-                        that.codeToken = res.data.data.token
+                        var data = res && res.data && res.data.data;
+                        if (!res || !res.data || res.data.code !== CODE_SUCCESS || !data || !data.img || !data.token) {
+                            throw new Error((res && res.data && res.data.message) || '验证码响应无效');
+                        }
+                        that.codeUrl = data.img;
+                        that.codeToken = data.token;
                     })
                     .catch(function (error) {
-                        that.$message.error('获取失败');
+                        that.captchaError = '验证码加载失败，请点击重试';
+                        that.$message.error('验证码获取失败，请稍后重试');
+                    })
+                    .then(function () {
+                        that.captchaLoading = false;
                     });
             },
         }

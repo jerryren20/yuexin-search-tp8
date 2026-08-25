@@ -4,7 +4,7 @@
 
 ## 本地验证
 
-1. 复制原项目的 `.env` 到本目录，并把数据库改为测试库；不要把 `.env` 提交到 Git。
+1. 复制原项目的 `.env` 到本目录，并把数据库连接写入 `config/database.php`；`.env` 仅保存非数据库环境配置，不要提交到 Git。
 2. 安装依赖并清理缓存：
 
    ```bash
@@ -18,7 +18,7 @@
 ## 上线步骤
 
 1. 备份原目录、`data/` 和数据库；先复制数据库到测试实例。
-2. 在新目录配置生产 `.env`，至少确认 `DATABASE`、`APP_DEBUG=false`、网盘 Cookie 和 `NETDISK_CA_BUNDLE`（留空时使用系统 CA）。
+2. 在新目录配置 `config/database.php` 的生产数据库连接，并确认 `.env` 中 `APP_DEBUG=false`、网盘 Cookie 和 `NETDISK_CA_BUNDLE`（留空时使用系统 CA）。
 3. 运行 `composer install --no-dev --optimize-autoloader`、`php think clear`，重启 PHP-FPM 后做接口冒烟测试。
 4. 通过站点根目录切换到新目录；确认站点的 `index` 优先级包含 `public/index.php`（不要让项目根目录的占位 `index.html` 抢先返回）；保留旧目录，出现问题时将根目录切回即可回滚。
 
