@@ -110,6 +110,12 @@ $password = trim((string) ($_POST['manager_pwd'] ?? ''));
 //网站名称
 $site_name = trim((string) ($_POST['sitename'] ?? ''));
 
+// 表前缀会出现在 SQL 标识符中，必须限制为安全的标识符字符。
+$dbPrefix = trim((string) ($dbPrefix ?? ''));
+if ($dbPrefix === '' || !preg_match('/^[A-Za-z0-9_]+$/', $dbPrefix)) {
+	return array('status'=>0,'info'=>'数据库表前缀格式不正确，请仅使用字母、数字和下划线');
+}
+
 // 调试信息：检查数据库连接
 if(!isset($mysqli) || !($mysqli instanceof mysqli) || $mysqli->connect_error) {
 	return array('status'=>0,'info'=>'数据库连接不可用：' . (isset($mysqli) ? $mysqli->connect_error : '数据库连接对象不存在'));
@@ -142,21 +148,35 @@ $salt = genRandomString(4);
 $time = time();
 $ip = get_client_ip();
 $password = sha1($password . $salt . $password . $salt);
-$url = "INSERT INTO `{$dbPrefix}admin` (`admin_account`, `admin_password`, `admin_salt`, `admin_name`, `admin_idcard`, `admin_truename`, `admin_email`, `admin_money`, `admin_group`, `admin_ipreg`, `admin_status`, `admin_createtime`, `admin_updatetime`) VALUES ('{$username}', '{$password}', '{$salt}', '超级管理员', '', '超级管理员', '', 0.00, 1, '{$ip}', 0, '{$time}', '{$time}')";
-
-// 调试信息已移除，避免影响返回值处理
-
-if(!$mysqli->query($url)){
-	return array('status'=>0,'info'=>'创建管理员账户失败：' . $mysqli->error . '<br/>SQL语句：' . htmlspecialchars($url));
-}
-
-// 验证插入是否成功
-$check_result = $mysqli->query("SELECT COUNT(*) as count FROM `{$dbPrefix}admin` WHERE admin_account='{$username}'");
-if($check_result) {
-	$row = $check_result->fetch_assoc();
-	if($row['count'] == 0) {
-		return array('status'=>0,'info'=>'管理员账户插入失败：数据未成功写入数据库');
+$adminTable = "`{$dbPrefix}admin`";
+$adminSql = "INSERT INTO {$adminTable} (`admin_account`, `admin_password`, `admin_salt`, `admin_name`, `admin_idcard`, `admin_truename`, `admin_email`, `admin_money`, `admin_group`, `admin_ipreg`, `admin_status`, `admin_createtime`, `admin_updatetime`) VALUES (?, ?, ?, '超级管理员', '', '超级管理员', '', 0.00, 1, ?, 0, ?, ?)";
+$adminStatement = $mysqli->prepare($adminSql);
+if (!$adminStatement || !$adminStatement->bind_param('ssssii', $username, $password, $salt, $ip, $time, $time) || !$adminStatement->execute()) {
+	$error = $adminStatement ? $adminStatement->error : $mysqli->error;
+	error_log('[installer] administrator insert failed: ' . $error);
+	if ($adminStatement) {
+		$adminStatement->close();
 	}
+	return array('status'=>0,'info'=>'创建管理员账户失败，请检查数据库结构或管理员账号');
+}
+$adminStatement->close();
+
+// 验证插入是否成功；账号值通过参数绑定，避免安装请求构造 SQL。
+$checkStatement = $mysqli->prepare("SELECT COUNT(*) AS count FROM {$adminTable} WHERE admin_account = ?");
+if (!$checkStatement || !$checkStatement->bind_param('s', $username) || !$checkStatement->execute()) {
+	$error = $checkStatement ? $checkStatement->error : $mysqli->error;
+	error_log('[installer] administrator verification failed: ' . $error);
+	if ($checkStatement) {
+		$checkStatement->close();
+	}
+	return array('status'=>0,'info'=>'管理员账户校验失败，请稍后重试');
+}
+$checkCount = 0;
+$checkStatement->bind_result($checkCount);
+$checkStatement->fetch();
+$checkStatement->close();
+if ((int)$checkCount === 0) {
+	return array('status'=>0,'info'=>'管理员账户插入失败：数据未成功写入数据库');
 }
 
 $mysqli->close();
