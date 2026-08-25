@@ -2,8 +2,7 @@
 /.vscode/
 /.idea/
 /.svn/
-/vendor/
-
+/tests
 /runtime/
 /data/pan_tree_cache/*
 !/data/pan_tree_cache/.gitkeep
