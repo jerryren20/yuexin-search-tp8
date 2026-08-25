@@ -104,7 +104,7 @@ function install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbP
 	return "<?php\n\nreturn " . $export . ";\n";
 }
 
-function install_env_content($siteName)
+function install_env_content()
 {
 	// SYSTEM_SALT is a cryptographic secret, not a copy of the visible site name.
 	$systemSalt = bin2hex(random_bytes(32));
@@ -137,13 +137,16 @@ if ($dbPrefix === '' || !preg_match('/^[A-Za-z0-9_]+$/', $dbPrefix)) {
 
 // 调试信息：检查数据库连接
 if(!isset($mysqli) || !($mysqli instanceof mysqli) || $mysqli->connect_error) {
-	return array('status'=>0,'info'=>'数据库连接不可用：' . (isset($mysqli) ? $mysqli->connect_error : '数据库连接对象不存在'));
+	$error = isset($mysqli) ? $mysqli->connect_error : '数据库连接对象不存在';
+	error_log('[installer] database connection unavailable: ' . $error);
+	return array('status'=>0,'info'=>'数据库连接不可用，请返回检查数据库参数');
 }
 
 //更新配置信息
 $site_name_sql = $mysqli->real_escape_string($site_name);
 if(!$mysqli->query("UPDATE `{$dbPrefix}conf` SET  `conf_value` = '$site_name_sql' WHERE conf_key='app_name'")){
-	return array('status'=>0,'info'=>'更新网站名称配置失败：' . $mysqli->error);
+	error_log('[installer] updating site name failed: ' . $mysqli->error);
+	return array('status'=>0,'info'=>'更新网站名称配置失败，请检查数据库结构');
 }
 
 //插入管理员
@@ -193,7 +196,7 @@ if(INSTALLTYPE == 'HOST'){
 	if (!install_write_file($databaseConfigPath, $databaseConfig)) {
 		return array('status'=>0,'info'=>'写入 config/database.php 失败，请检查 config 目录权限');
 	}
-	if (!install_write_file($envPath, install_env_content($site_name))) {
+	if (!install_write_file($envPath, install_env_content())) {
 		return array('status'=>0,'info'=>'写入 .env 失败，请检查项目根目录权限');
 	}
 }

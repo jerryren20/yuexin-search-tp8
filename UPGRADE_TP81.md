@@ -4,7 +4,8 @@
 
 ## 本地验证
 
-1. 复制原项目的 `.env` 到本目录，并把数据库连接写入 `config/database.php`；`.env` 仅保存非数据库环境配置，不要提交到 Git。
+1. 复制原项目的 `.env` 到本目录；如果其中存在 `[DATABASE]` 段，请逐项复制到 `config/database.php` 的 `connections.mysql` 后删除该段。`.env` 仅保存非数据库环境配置，不要提交到 Git。
+   生产部署完成后不要把填写了密码的 `config/database.php` 加入 Git；可在部署机执行 `git update-index --skip-worktree config/database.php`，并通过备份或密钥管理保存该文件。
 2. 安装依赖并清理缓存：
 
    ```bash

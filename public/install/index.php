@@ -53,16 +53,17 @@ function install_format_db_connect_error($mysqli)
 	if ($error === '') {
 		$error = '未知错误';
 	}
+	error_log('[installer] database connection failed: ' . $error);
 
 	if (
 		stripos($error, 'caching_sha2_password') !== false
 		|| stripos($error, 'authentication method unknown') !== false
 		|| stripos($error, 'requested authentication method unknown') !== false
 	) {
-		return '数据库链接失败！当前数据库用户使用 caching_sha2_password 认证方式，但当前 PHP mysqli/mysqlnd 不支持。请将该数据库用户认证方式改为 mysql_native_password，或升级 PHP 的 mysqli/mysqlnd 后重试。原始错误信息：' . $error;
+		return '数据库链接失败！当前 PHP mysqli/mysqlnd 可能不支持数据库用户的认证方式，请升级 PHP 或调整数据库用户认证方式后重试。';
 	}
 
-	return '数据库链接失败！错误信息：' . $error;
+	return '数据库链接失败！请检查数据库地址、端口、用户名和密码。';
 }
 
 //安装步骤
@@ -237,7 +238,8 @@ switch ($step) {
 			
 			// 设置字符集
 			if(!$mysqli->query("SET NAMES 'utf8mb4'")){
-				alert(0,'设置字符集失败！错误信息：' . $mysqli->error);
+				error_log('[installer] setting database charset failed: ' . $mysqli->error);
+				alert(0,'设置数据库字符集失败，请检查数据库权限和版本');
 			}
 			
 			// 检查MySQL版本
@@ -249,10 +251,12 @@ switch ($step) {
 			if(!$mysqli->select_db($dbName)){
 				$create_sql='CREATE DATABASE IF NOT EXISTS `'.$dbName.'` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;';
 				if(!$mysqli->query($create_sql)){
-					alert(0,'创建数据库失败！错误信息：' . $mysqli->error);
+					error_log('[installer] creating database failed: ' . $mysqli->error);
+					alert(0,'创建数据库失败，请检查数据库用户权限');
 				}
 				if(!$mysqli->select_db($dbName)){
-					alert(0,'选择数据库失败！错误信息：' . $mysqli->error);
+					error_log('[installer] selecting database failed: ' . $mysqli->error);
+					alert(0,'选择数据库失败，请检查数据库名称和权限');
 				}
 			}
 			
@@ -282,7 +286,8 @@ switch ($step) {
 							continue;
 						}
 					}
-					alert(0, '创建数据表' . $matches[1] . '失败！错误信息：' . $mysqli->error);
+					error_log('[installer] creating table ' . ($matches[1] ?? 'unknown') . ' failed: ' . $mysqli->error);
+					alert(0, '创建数据表失败，请检查数据库版本和权限');
 				}
 			}else{
 					if(!empty($sql)){
