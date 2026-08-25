@@ -107,7 +107,12 @@ function install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbP
 function install_env_content()
 {
 	// SYSTEM_SALT is a cryptographic secret, not a copy of the visible site name.
-	$systemSalt = bin2hex(random_bytes(32));
+	try {
+		$systemSalt = bin2hex(random_bytes(32));
+	} catch (\Throwable $e) {
+		error_log('[installer] generating system salt failed: ' . $e->getMessage());
+		return false;
+	}
 	return "APP_DEBUG = false\n"
 		. "SYSTEM_SALT = " . $systemSalt . "\n\n"
 		. "[APP]\n"
@@ -196,7 +201,8 @@ if(INSTALLTYPE == 'HOST'){
 	if (!install_write_file($databaseConfigPath, $databaseConfig)) {
 		return array('status'=>0,'info'=>'写入 config/database.php 失败，请检查 config 目录权限');
 	}
-	if (!install_write_file($envPath, install_env_content())) {
+	$envContent = install_env_content();
+	if ($envContent === false || !install_write_file($envPath, $envContent)) {
 		return array('status'=>0,'info'=>'写入 .env 失败，请检查项目根目录权限');
 	}
 }
