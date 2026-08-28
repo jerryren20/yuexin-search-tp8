@@ -60,9 +60,9 @@ function install_write_file($path, $content)
 }
 
 /**
- * Build the static database configuration consumed by config/database.php.
+ * Build a fallback database configuration when the project config is absent.
  */
-function install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix)
+function install_database_config_default_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix)
 {
 	$schemaPathMarker = '__INSTALL_RUNTIME_SCHEMA_PATH__';
 	$config = [
@@ -102,6 +102,63 @@ function install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbP
 	);
 
 	return "<?php\n\nreturn " . $export . ";\n";
+}
+
+/**
+ * Replace only the six connection values in the existing database config.
+ * Keeping the original file as the template preserves comments, ordering and
+ * any project-specific options outside the connection credentials.
+ */
+function install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix, $configPath = null)
+{
+	$configPath = $configPath ?: dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'database.php';
+	$values = [
+		'hostname' => (string) $dbHost,
+		'database' => (string) $dbName,
+		'username' => (string) $dbUser,
+		'password' => (string) $dbPwd,
+		'hostport' => (string) $dbPort,
+		'prefix' => (string) $dbPrefix,
+	];
+
+	if (is_file($configPath)) {
+		$content = @file_get_contents($configPath);
+		if ($content === false || $content === '') {
+			return false;
+		}
+
+		foreach ($values as $key => $value) {
+			// Match the complete right-hand expression so both literal values and
+			// env('database.*', 'default') values are replaced safely. The final
+			// comma is captured separately; commas inside env() or strings stay
+			// untouched. Inline comments are retained as part of the suffix.
+			$pattern = '/(^[ \t]*[\'\"]' . preg_quote($key, '/') . '[\'\"]\s*=>\s*)([^\r\n]*)(\r?)$/m';
+			$replaced = 0;
+			$content = preg_replace_callback($pattern, function ($matches) use ($value) {
+				$rightHandSide = $matches[2];
+				$comma = '';
+				$suffix = '';
+
+				if (preg_match('/^(.*?)(,)([ \t]*(?:(?:\/\/|#|\/\*).*)?)$/', $rightHandSide, $parts)) {
+					$comma = $parts[2];
+					$suffix = $parts[3];
+				} elseif (preg_match('/^(.+?)([ \t]+(?:(?:\/\/|#|\/\*).*))$/', $rightHandSide, $parts)) {
+					// A final array entry may omit its comma; still keep an inline
+					// comment instead of dropping it during installation.
+					$suffix = $parts[2];
+				}
+
+				return $matches[1] . var_export($value, true) . $comma . $suffix . ($matches[3] ?? '');
+			}, $content, 1, $replaced);
+			if ($content === null || $replaced !== 1) {
+				return false;
+			}
+		}
+
+		return $content;
+	}
+
+	return install_database_config_default_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix);
 }
 
 function install_env_content()
@@ -197,7 +254,10 @@ if(INSTALLTYPE == 'HOST'){
 	$envPath = $projectRoot . DIRECTORY_SEPARATOR . '.env';
 
 	// 数据库连接信息只在数据库和管理员创建成功后写入，.env 仅保留非数据库配置。
-	$databaseConfig = install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix);
+	$databaseConfig = install_database_config_content($dbHost, $dbName, $dbUser, $dbPwd, $dbPort, $dbPrefix, $databaseConfigPath);
+	if ($databaseConfig === false) {
+		return array('status'=>0,'info'=>'读取 config/database.php 失败，请检查文件权限和配置结构');
+	}
 	if (!install_write_file($databaseConfigPath, $databaseConfig)) {
 		return array('status'=>0,'info'=>'写入 config/database.php 失败，请检查 config 目录权限');
 	}

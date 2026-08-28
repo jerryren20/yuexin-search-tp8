@@ -16,8 +16,9 @@ require __DIR__ . '/localhost.php';
 set_time_limit(1000);
 //php版本
 $phpversion = phpversion();
-//数据库文件
-if(!file_exists(__DIR__ . '/'.$config['sqlFileName'])){
+//数据库文件（始终基于安装脚本目录解析，避免 PHP-FPM 工作目录不同导致读取失败）
+$sqlFilePath = __DIR__ . DIRECTORY_SEPARATOR . $config['sqlFileName'];
+if(!is_file($sqlFilePath) || !is_readable($sqlFilePath)){
 	exit(get_tip_html('数据库文件不存在，无法继续安装！'));
 }
 //写入数据库完成后处理的文件
@@ -27,13 +28,19 @@ if (!file_exists(__DIR__ . '/'.$config['handleFile'])) {
 //设置报错级别并返回当前级别。
 error_reporting(E_ALL & ~E_NOTICE);
 
-function install_create_mysqli($dbHost, $dbUser, $dbPwd)
+function install_create_mysqli($dbHost, $dbUser, $dbPwd, $dbName = '', $dbPort = 3306)
 {
+	if (!extension_loaded('mysqli')) {
+		return null;
+	}
+
 	// PHP 8 默认可能将连接失败升级为 mysqli_sql_exception；安装器需要
 	// 把它转换为可处理的连接错误，不能让异常污染页面或 AJAX JSON。
-	$previousReportMode = mysqli_report(MYSQLI_REPORT_OFF);
+	$driver = new mysqli_driver();
+	$previousReportMode = $driver->report_mode;
+	mysqli_report(MYSQLI_REPORT_OFF);
 	try {
-		return @new mysqli($dbHost, $dbUser, $dbPwd);
+		return @new mysqli($dbHost, $dbUser, $dbPwd, $dbName, (int) $dbPort);
 	} catch (Throwable $e) {
 		return null;
 	} finally {
@@ -44,10 +51,10 @@ function install_create_mysqli($dbHost, $dbUser, $dbPwd)
 function install_format_db_connect_error($mysqli)
 {
 	$error = '';
-	if ($mysqli instanceof mysqli) {
+	if (class_exists('mysqli', false) && $mysqli instanceof mysqli) {
 		$error = $mysqli->connect_error;
 	}
-	if ($error === '') {
+	if ($error === '' && function_exists('mysqli_connect_error')) {
 		$error = mysqli_connect_error();
 	}
 	if ($error === '') {
@@ -121,8 +128,8 @@ switch ($step) {
 
 		//需要读写权限的目录
 		$folder = $config['dirAccess'];
-		$install_path = str_replace('\\','/',getcwd()).'/';
-		$site_path = str_replace('Install/', '', $install_path);
+		// PHP-FPM 的工作目录不一定是安装目录；权限检查必须基于脚本位置。
+		$site_path = rtrim(str_replace('\\', '/', dirname(__DIR__)), '/') . '/';
 		include (__DIR__ . "/templates/2.php");
 		$_SESSION['INSTALLSTATUS'] = $error == 0?'SUCCESS':$error;
 		break;
@@ -135,8 +142,12 @@ switch ($step) {
 			empty($_POST['dbuser'])?alert(0,'数据库用户名不能为空！','dbuser'):'';
 			empty($_POST['dbname'])?alert(0,'数据库名不能为空！','dbname'):'';
 			empty($_POST['dbport'])?alert(0,'数据库端口不能为空！','dbport'):'';
-			$dbHost = $_POST['dbhost'] . ':' . $_POST['dbport'];
-			$mysqli = install_create_mysqli($dbHost,  $_POST['dbuser'], $_POST['dbpw']);
+			$dbHost = trim((string) $_POST['dbhost']);
+			$dbPort = (int) $_POST['dbport'];
+			if (!install_is_port($dbPort)) {
+				alert(0, '数据库端口格式不正确，请填写 1-65535 之间的数字', 'dbport');
+			}
+			$mysqli = install_create_mysqli($dbHost,  $_POST['dbuser'], (string) ($_POST['dbpw'] ?? ''), '', $dbPort);
 			// 改进错误检查机制
 			if(!$mysqli || $mysqli->connect_error)  {
 				alert(0, install_format_db_connect_error($mysqli), 'dbpw');
@@ -150,14 +161,18 @@ switch ($step) {
 			$mysqli->close();
 		}
 		//域名+路径
-		$domain = empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : $_SERVER['SERVER_NAME'];
-		if ((int) $_SERVER['SERVER_PORT'] != 80) {
-			$domain .= ":" . $_SERVER['SERVER_PORT'];
+		$domain = trim((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost'));
+		if ($domain === '') {
+			$domain = 'localhost';
 		}
-		$scriptName = !empty($_SERVER["REQUEST_URI"]) ? $scriptName = $_SERVER["REQUEST_URI"] : $scriptName = $_SERVER["PHP_SELF"];
+		$serverPort = (int) ($_SERVER['SERVER_PORT'] ?? 80);
+		if ($serverPort !== 80 && $serverPort !== 443 && strpos($domain, ':') === false) {
+			$domain .= ":" . $serverPort;
+		}
+		$scriptName = (string) ($_SERVER['REQUEST_URI'] ?? $_SERVER['PHP_SELF'] ?? '');
 		$rootpath = preg_replace("/\/(I|i)nstall\/index\.php(.*)$/", "", $scriptName);
 		$domain = $domain . $rootpath;
-		include ("./templates/3.php");
+		include (__DIR__ . "/templates/3.php");
 		break;
 	//安装详细过程
 	case '4':
@@ -211,14 +226,16 @@ switch ($step) {
 			$dbHost = trim((string) ($_POST['dbhost'] ?? ''));
 			//数据库端口
 			$dbPort = trim((string) ($_POST['dbport'] ?? ''));
+			if (!install_is_port($dbPort)) {
+				alert(0, '数据库端口格式不正确，请填写 1-65535 之间的数字');
+			}
 			//数据库名
 			$dbName = trim((string) ($_POST['dbname'] ?? ''));
-			// 保留不带端口的主机名，mysqli 使用单独的连接地址变量。
-			$mysqliHost = empty($dbPort) || $dbPort == 3306 ? $dbHost : $dbHost . ':' . $dbPort;
 			//数据库用户名
 			$dbUser = trim((string) ($_POST['dbuser'] ?? ''));
 			//数据库密码
-			$dbPwd = trim((string) ($_POST['dbpw'] ?? ''));
+			// 密码必须保留用户输入的首尾空格，不能使用 trim() 改变真实凭据。
+			$dbPwd = (string) ($_POST['dbpw'] ?? '');
 			//表前缀
 			$dbPrefix = empty($_POST['dbprefix'])
 				? trim((string) ($config['dbPrefix'] ?? 'qf_'))
@@ -230,11 +247,14 @@ switch ($step) {
 				alert(0, '数据库表前缀格式不正确，请仅使用字母、数字和下划线');
 			}
 			//链接数据库
-			$mysqli = install_create_mysqli($mysqliHost, $dbUser, $dbPwd);
+			$mysqli = install_create_mysqli($dbHost, $dbUser, $dbPwd, '', (int) $dbPort);
 			// 改进数据库连接错误检查
 			if (!$mysqli || $mysqli->connect_error) {
 				alert(0, install_format_db_connect_error($mysqli));
 			}
+			// PHP 8 默认可能把 SQL 错误转换成异常；安装器需要通过返回值
+			// 统一处理每条语句，避免异常文本破坏 AJAX JSON 响应。
+			mysqli_report(MYSQLI_REPORT_OFF);
 			
 			// 设置字符集
 			if(!$mysqli->query("SET NAMES 'utf8mb4'")){
@@ -261,38 +281,46 @@ switch ($step) {
 			}
 			
 			// 导入sql数据并创建表
-			$sqldata = file_get_contents('./'.$config['sqlFileName']);
-			if(empty($sqldata)){
+			$sqldata = @file_get_contents($sqlFilePath);
+			if($sqldata === false || trim($sqldata) === ''){
 				alert(0,'数据库文件不能为空！');
 			}
 			
-			// 使用原始的SQL分割方式，保持兼容性
-			$sql_array = preg_split("/;[\r\n]+/", str_replace($config['dbPrefix'], $dbPrefix, $sqldata));
+			// 按 SQL 语句分割，忽略注释并避免拆分字符串中的分号。
+			$sql_array = sql_split($sqldata, $dbPrefix, $config['dbPrefix']);
+			if (empty($sql_array)) {
+				alert(0, '数据库文件中没有可执行的 SQL 语句！');
+			}
 			$counts = count($sql_array);
 			$created_tables = array(); // 记录创建的表
 			
 			for ($i = $n; $i < $counts; $i++) {
 				$sql = trim($sql_array[$i]);
-				if (strstr($sql, 'CREATE TABLE')) {
-					preg_match('/CREATE TABLE `([^ ]*)`/', $sql, $matches);
-				if($mysqli->query($sql_array[$i])){
-					$created_tables[] = $matches[1];
-				} else {
-					// 如果是因为 ngram 不支持导致的错误，尝试移除 ngram 再次创建
-					if (strpos($mysqli->error, 'ngram') !== false) {
-						$newSql = str_replace(' WITH PARSER ngram', '', $sql_array[$i]);
-						if ($mysqli->query($newSql)) {
-							$created_tables[] = $matches[1] . ' (Fallback: No ngram)';
-							continue;
+				if ($sql === '') {
+					continue;
+				}
+
+				$isCreateTable = preg_match('/\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`([^`]+)`/i', $sql, $matches) === 1;
+				$createdTableName = $isCreateTable ? (string) ($matches[1] ?? '') : '';
+				$fallbackUsed = false;
+				$executed = $mysqli->query($sql);
+				if (!$executed && $isCreateTable && stripos($mysqli->error, 'ngram') !== false) {
+					// 部分 MySQL/MariaDB 未启用 ngram 时，移除该索引解析器后重试。
+					$newSql = preg_replace('/\s+WITH\s+PARSER\s+ngram\b/i', '', $sql);
+					if ($newSql !== null) {
+						$executed = $mysqli->query($newSql);
+						if ($executed) {
+							$fallbackUsed = true;
+							$created_tables[] = ($createdTableName !== '' ? $createdTableName : 'unknown') . ' (Fallback: No ngram)';
 						}
 					}
-					error_log('[installer] creating table ' . ($matches[1] ?? 'unknown') . ' failed: ' . $mysqli->error);
-					alert(0, '创建数据表失败，请检查数据库版本和权限');
 				}
-			}else{
-					if(!empty($sql)){
-						$mysqli->query($sql);
-					}
+				if (!$executed) {
+					error_log('[installer] SQL statement ' . ($i + 1) . ' failed: ' . $mysqli->error);
+					alert(0, $isCreateTable ? '创建数据表失败，请检查数据库版本和权限' : '执行初始化 SQL 失败，请检查数据库权限和版本');
+				}
+				if ($isCreateTable && !$fallbackUsed && $createdTableName !== '' && !in_array($createdTableName, $created_tables, true)) {
+					$created_tables[] = $createdTableName;
 				}
 			}
 			
@@ -310,7 +338,10 @@ switch ($step) {
 			if($data['status'] == 2) {
 				$info .= '<li><span class="correct_span">&radic;</span>' . $data['info'] . '<span style="float: right;">'.date('Y-m-d H:i:s').'</span></li>';
 				// 安装完成，返回特殊的type标识
-				exit(json_encode(array('status'=>2,'info'=>$info,'type'=>'install_complete')));
+				if (!headers_sent()) {
+					header('Content-Type: application/json; charset=utf-8');
+				}
+				exit(json_encode(array('status'=>2,'info'=>$info,'type'=>'install_complete'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 			} else {
 				$info .= '<li><span class="error_span">×</span>' . $data['info'] . '<span style="float: right;">'.date('Y-m-d H:i:s').'</span></li>';
 				alert(0, $info);
@@ -341,7 +372,10 @@ function get_tip_html($info){
 }
 //返回提示信息
 function alert($status,$info,$type = 0){
-	exit(json_encode(array('status'=>$status,'info'=>$info,'type'=>$type)));
+	if (!headers_sent()) {
+		header('Content-Type: application/json; charset=utf-8');
+	}
+	exit(json_encode(array('status'=>$status,'info'=>$info,'type'=>$type), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 function verify($step = 3){
 	if($step >= 3){
@@ -387,6 +421,16 @@ function install_is_identifier($value) {
 	return preg_match('/^[A-Za-z0-9_]+$/D', (string) $value) === 1;
 }
 /**
+ * Validate a TCP port accepted by mysqli.
+ */
+function install_is_port($value) {
+	if (!is_int($value) && !ctype_digit((string) $value)) {
+		return false;
+	}
+	$port = (int) $value;
+	return $port >= 1 && $port <= 65535;
+}
+/**
  * 判断目录是否可写
  */
 function testwrite($d) {
@@ -419,42 +463,87 @@ function dir_create($path, $mode = 0777) {
  * @param $oldTablePre 旧的前缀
  */
 function sql_split($sql, $newTablePre, $oldTablePre) {
-	//前缀替换
-	if ($newTablePre != $oldTablePre){
-		$sql = str_replace($oldTablePre, $newTablePre, $sql);
+	if (!is_string($sql) || $sql === '') {
+		return array();
 	}
-	$sql = preg_replace("/TYPE=(InnoDB|MyISAM|MEMORY)( DEFAULT CHARSET=[^; ]+)?/", "ENGINE=\\1 DEFAULT CHARSET=utf8", $sql);
 
-	// 统一换行符
-	$sql = str_replace(array("\r\n", "\r"), "\n", $sql);
-	
-	// 按分号分割SQL语句
-	$queriesarray = explode(";", $sql);
-	$ret = array();
-	
-	foreach ($queriesarray as $query) {
-		$query = trim($query);
-		if (empty($query)) continue;
-		
-		// 移除注释行
-		$lines = explode("\n", $query);
-		$cleanQuery = '';
-		foreach ($lines as $line) {
-			$line = trim($line);
-			if (empty($line)) continue;
-			$firstChar = substr($line, 0, 1);
-			if ($firstChar != '#' && $firstChar != '-' && substr($line, 0, 2) != '--') {
-				$cleanQuery .= $line . ' ';
-			}
-		}
-		
-		$cleanQuery = trim($cleanQuery);
-		if (!empty($cleanQuery)) {
-			$ret[] = $cleanQuery;
-		}
+	// 前缀替换。安装 SQL 使用 qf_，允许安装时改成其他安全前缀。
+	if ((string) $newTablePre !== (string) $oldTablePre) {
+		$sql = str_replace((string) $oldTablePre, (string) $newTablePre, $sql);
 	}
-	
-	return $ret;
+	$sql = preg_replace("/TYPE=(InnoDB|MyISAM|MEMORY)( DEFAULT CHARSET=[^; ]+)?/i", "ENGINE=\\1 DEFAULT CHARSET=utf8", $sql);
+	$sql = str_replace(array("\r\n", "\r"), "\n", (string) $sql);
+
+	$queries = array();
+	$buffer = '';
+	$length = strlen($sql);
+	$quote = null;
+
+	for ($i = 0; $i < $length; $i++) {
+		$char = $sql[$i];
+
+		if ($quote !== null) {
+			$buffer .= $char;
+			if ($char === '\\' && $i + 1 < $length) {
+				$buffer .= $sql[++$i];
+				continue;
+			}
+			if ($char === $quote) {
+				// SQL 允许用两个相同引号表示一个引号字符。
+				if ($i + 1 < $length && $sql[$i + 1] === $quote) {
+					$buffer .= $sql[++$i];
+					continue;
+				}
+				$quote = null;
+			}
+			continue;
+		}
+
+		if ($char === "'" || $char === '"' || $char === '`') {
+			$quote = $char;
+			$buffer .= $char;
+			continue;
+		}
+
+		// 跳过普通块注释、# 注释和 -- 注释，避免注释中的分号干扰分割。
+		if ($char === '/' && $i + 1 < $length && $sql[$i + 1] === '*') {
+			$i += 2;
+			while ($i < $length - 1 && !($sql[$i] === '*' && $sql[$i + 1] === '/')) {
+				$i++;
+			}
+			$i = min($length - 1, $i + 1);
+			continue;
+		}
+		if ($char === '#') {
+			while ($i + 1 < $length && $sql[$i + 1] !== "\n") {
+				$i++;
+			}
+			continue;
+		}
+		if ($char === '-' && $i + 1 < $length && $sql[$i + 1] === '-' && ($i + 2 >= $length || ctype_space($sql[$i + 2]))) {
+			$i += 2;
+			while ($i + 1 < $length && $sql[$i + 1] !== "\n") {
+				$i++;
+			}
+			continue;
+		}
+
+		if ($char === ';') {
+			$query = trim($buffer);
+			if ($query !== '') {
+				$queries[] = $query;
+			}
+			$buffer = '';
+			continue;
+		}
+		$buffer .= $char;
+	}
+
+	$query = trim($buffer);
+	if ($query !== '') {
+		$queries[] = $query;
+	}
+	return $queries;
 }
 /**
  * 产生随机字符串

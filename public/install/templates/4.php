@@ -22,6 +22,11 @@
 				data: postData, // 使用重命名后的变量
 				dataType: 'json',
 				success: function(response){ // 重命名响应参数避免冲突
+					if (!response || typeof response.status === 'undefined') {
+						$('#loginner').append('<li><span class="error_span">×</span>安装服务返回了无效响应，请检查服务器日志。</li>');
+						$('#installloading').removeClass('btn_old').addClass('btn').html('重试安装').off('click').on('click', function(){ reloads(0); });
+						return;
+					}
 					$('#loginner').append(response.info);
 					if(response.status == 1){
 						reloads(response.type);
@@ -40,6 +45,12 @@
 						setTimeout(function(){
 							window.location.href='./index.php?step=5';
 						},2000); // 缩短跳转时间到2秒
+					}
+					},
+					error: function(){
+						// 不把服务器返回正文直接插入页面，避免 PHP Warning/路径等内部信息泄露。
+						$('#loginner').append('<li><span class="error_span">×</span>安装请求失败，请检查数据库参数和服务器日志。</li>');
+						$('#installloading').removeClass('btn_old').addClass('btn').html('重试安装').off('click').on('click', function(){ reloads(0); });
 					}
 				}
 			});
