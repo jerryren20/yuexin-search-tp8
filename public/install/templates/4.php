@@ -52,7 +52,6 @@
 						$('#loginner').append('<li><span class="error_span">×</span>安装请求失败，请检查数据库参数和服务器日志。</li>');
 						$('#installloading').removeClass('btn_old').addClass('btn').html('重试安装').off('click').on('click', function(){ reloads(0); });
 					}
-				}
 			});
 		}
 		$(function(){
