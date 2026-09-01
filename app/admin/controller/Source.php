@@ -11,7 +11,7 @@ use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
 use app\admin\QfShop;
 use app\model\Source as SourceModel;
 use app\model\SourceLog as SourceLogModel;
-use quarkPlugin\QuarkPlugin;
+use QuarkPlugin\QuarkPlugin;
 
 class Source extends QfShop
 {

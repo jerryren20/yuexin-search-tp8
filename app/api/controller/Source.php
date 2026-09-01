@@ -7,7 +7,7 @@ use think\App;
 use app\api\QfShop;
 use think\facade\Cache;
 use Carbon\Carbon;
-use quarkPlugin\QuarkPlugin;
+use QuarkPlugin\QuarkPlugin;
 use app\model\SourceCategory as SourceCategoryModel;
 
 class Source extends QfShop
