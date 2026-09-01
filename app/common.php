@@ -515,17 +515,47 @@ function getTicket($key)
  * Configure TLS verification for every outbound cURL request.
  *
  * The operating system trust store is used by default. Deployments with a
- * custom CA bundle may set NETDISK_CA_BUNDLE (or [NETDISK] CA_BUNDLE).
+ * custom CA bundle may configure it in the admin panel or set
+ * NETDISK_CA_BUNDLE (or [NETDISK] CA_BUNDLE).
  */
+function resolveCaBundlePath(string $configuredPath, ?string $projectRoot = null): string
+{
+    $path = trim($configuredPath);
+    if ($path === '') {
+        return '';
+    }
+
+    $isAbsolute = $path[0] === '/'
+        || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1
+        || strncmp($path, '\\\\', 2) === 0;
+    if ($isAbsolute) {
+        return $path;
+    }
+
+    $projectRoot = $projectRoot ?: (function_exists('root_path') ? root_path() : dirname(__DIR__));
+    $relativePath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+    return rtrim($projectRoot, '/\\') . DIRECTORY_SEPARATOR . ltrim($relativePath, '/\\');
+}
+
+function getConfiguredCaBundlePath(): string
+{
+    $caBundle = '';
+    if (function_exists('config')) {
+        $caBundle = trim((string)config('qfshop.netdisk_ca_bundle'));
+    }
+    if ($caBundle === '' && function_exists('env')) {
+        $caBundle = trim((string)env('NETDISK_CA_BUNDLE', env('netdisk.ca_bundle', '')));
+    }
+
+    return resolveCaBundlePath($caBundle);
+}
+
 function configureCurlTls($ch): void
 {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
-    $caBundle = '';
-    if (function_exists('env')) {
-        $caBundle = trim((string)env('NETDISK_CA_BUNDLE', env('netdisk.ca_bundle', '')));
-    }
+    $caBundle = getConfiguredCaBundlePath();
     if ($caBundle !== '' && is_file($caBundle) && is_readable($caBundle)) {
         curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
     }

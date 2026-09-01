@@ -115,6 +115,7 @@ class Conf extends QfShop
             'relay_url' => ['', 'Relay中转地址', '部署在香港或国内直连机器上的 relay.php 地址', 1009, 0, null, 1],
             'relay_secret' => ['', 'Relay密钥', '主站与 relay.php 之间的签名密钥，必须与 relay.php 配置一致', 1010, 0, null, 1],
             'relay_timeout' => ['20', 'Relay超时时间', '通过 Relay 请求网盘API的超时时间，单位秒', 1011, 0, null, 1],
+            'netdisk_ca_bundle' => ['', 'CA证书路径', '填写项目根目录相对路径或绝对路径；相对路径以项目根目录为基准，例如：data/certs/cacert.pem', 5, 1],
             'frontend_theme' => ['news', '前端主题', '选择前台首页、搜索页、详情页使用的主题；主题缺失时自动回退默认主题', 100, 3, "默认主题=>news\n简洁主题=>simple", 2],
         ];
         $exists = $this->model->whereIn('conf_key', array_keys($needItems))->column('conf_key');

@@ -158,6 +158,14 @@ SELECT 'other_pan_check_mode', 'local', '检测API类型', '选择检测接口�
 WHERE NOT EXISTS (SELECT 1 FROM `qf_conf` WHERE `conf_key` = 'other_pan_check_mode');
 
 INSERT INTO `qf_conf` (`conf_key`, `conf_value`, `conf_title`, `conf_desc`, `conf_status`, `conf_type`, `conf_spec`, `conf_content`, `conf_sort`, `conf_system`, `conf_createtime`, `conf_updatetime`)
+SELECT 'netdisk_ca_bundle', '', 'CA证书路径', '填写项目根目录相对路径或绝对路径；相对路径以项目根目录为基准，例如：data/certs/cacert.pem', 1, 1, 0, NULL, 5, 1, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
+WHERE NOT EXISTS (SELECT 1 FROM `qf_conf` WHERE `conf_key` = 'netdisk_ca_bundle');
+
+UPDATE `qf_conf`
+SET `conf_desc` = '填写项目根目录相对路径或绝对路径；相对路径以项目根目录为基准，例如：data/certs/cacert.pem'
+WHERE `conf_key` = 'netdisk_ca_bundle';
+
+INSERT INTO `qf_conf` (`conf_key`, `conf_value`, `conf_title`, `conf_desc`, `conf_status`, `conf_type`, `conf_spec`, `conf_content`, `conf_sort`, `conf_system`, `conf_createtime`, `conf_updatetime`)
 SELECT 'diagnostic_log_enable', '0', '诊断日志记录开关', '仅调试搜索、转存、目录树问题时开启，关闭后不再写入诊断日志', 0, 3, 2, '关闭=>0\n开启=>1', 0, 0, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()
 WHERE NOT EXISTS (SELECT 1 FROM `qf_conf` WHERE `conf_key` = 'diagnostic_log_enable');
 

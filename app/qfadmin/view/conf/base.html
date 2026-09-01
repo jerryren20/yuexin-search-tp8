@@ -342,7 +342,7 @@
                             desc: '控制全网搜是否开启、获取资源时走转存分享还是第三方直链，以及是否排除重复结果。',
                             tag: '常用',
                             tagType: 'success',
-                            keys: ['is_quan', 'is_quan_type', 'web_search_dedup', 'is_quan_zc', 'search_type']
+                            keys: ['is_quan', 'is_quan_type', 'web_search_dedup', 'netdisk_ca_bundle', 'is_quan_zc', 'search_type']
                         },
                         {
                             key: 'filter',
@@ -763,7 +763,7 @@
                         'uc_file', 'uc_file_time', 'ali_file', 'ali_file_time',
                         'xunlei_file', 'xunlei_file_time',
                         'redis_host', 'memcached_host', 'fake_quark_url', 'fake_baidu_url',
-                        'relay_url'
+                        'netdisk_ca_bundle', 'relay_url'
                     ];
                     return shortTextKeys.includes(item.conf_key);
                 },
@@ -842,6 +842,9 @@
                     }
                     if (item.conf_key === 'relay_url') {
                         return '例如：http://103.231.58.19:13456/relay.php';
+                    }
+                    if (item.conf_key === 'netdisk_ca_bundle') {
+                        return '例如：data/certs/cacert.pem';
                     }
                     if (item.conf_key === 'relay_secret') {
                         return '必须与 relay.php 中的 RELAY_SECRET 保持一致';

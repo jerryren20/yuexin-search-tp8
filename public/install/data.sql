@@ -194,6 +194,7 @@ INSERT INTO `qf_conf` VALUES ('89', 'memcached_username', '', 'Memcached用户�
 INSERT INTO `qf_conf` VALUES ('90', 'memcached_password', '', 'Memcached密码', 'SASL认证密码，未启用可留空', '0', '0', NULL, '4', '1', '8', '0', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 INSERT INTO `qf_conf` VALUES ('86', 'quark_ad_filter_enable', '1', '广告过滤开关', '开启后转存时会递归扫描并删除包含广告关键词的文件；关闭可节省30-50%转存时间', '0', '2', '开启=>1\n关闭=>0', '4', '1', '998', '1', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 INSERT INTO `qf_conf` VALUES ('85', 'web_search_dedup', '1', '全网搜去重开关', '开启后，全网搜将自动排除本地已转存的资源链接，避免结果重复。关闭后显示所有搜索结果（可能包含重复）', '0', '2', '开启=>1\n关闭=>0', '1', '1', '6', '1', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
+INSERT INTO `qf_conf` VALUES ('105', 'netdisk_ca_bundle', '', 'CA证书路径', '填写项目根目录相对路径或绝对路径；相对路径以项目根目录为基准，例如：data/certs/cacert.pem', '0', '0', NULL, '1', '1', '5', '1', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 INSERT INTO `qf_conf` VALUES ('97', 'fake_mode_enable', '0', '伪装模式开关', '开启后，前台资源链接会按网盘类型替换为下方配置的测试链接', '0', '2', '关闭=>0\n开启=>1', '1', '1', '1006', '0', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 INSERT INTO `qf_conf` VALUES ('98', 'fake_quark_url', '', '伪装夸克链接', '伪装模式开启后，夸克类型资源会展示此链接', '0', '0', NULL, '1', '1', '1007', '0', UNIX_TIMESTAMP(), UNIX_TIMESTAMP());

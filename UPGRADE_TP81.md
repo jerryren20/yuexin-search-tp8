@@ -19,7 +19,7 @@
 ## 上线步骤
 
 1. 备份原目录、`data/` 和数据库；先复制数据库到测试实例。
-2. 在新目录配置 `config/database.php` 的生产数据库连接，并确认 `.env` 中 `APP_DEBUG=false`、网盘 Cookie 和 `NETDISK_CA_BUNDLE`（留空时使用系统 CA）。
+2. 在新目录配置 `config/database.php` 的生产数据库连接，并确认 `.env` 中 `APP_DEBUG=false` 和网盘 Cookie；后台“基础设置 → 搜索设置 → CA证书路径”可填写项目根目录相对路径（如 `data/certs/cacert.pem`）或绝对路径，留空时使用 `.env` 中的 `NETDISK_CA_BUNDLE` 或系统 CA。
 3. 运行 `composer install --no-dev --optimize-autoloader`、`php think clear`，重启 PHP-FPM 后做接口冒烟测试。
 4. 通过站点根目录切换到新目录；确认站点的 `index` 优先级包含 `public/index.php`（不要让项目根目录的占位 `index.html` 抢先返回）；保留旧目录，出现问题时将根目录切回即可回滚。
 
@@ -27,5 +27,5 @@
 
 - 不要把旧 `vendor/` 复制回本目录；依赖版本由 `composer.lock` 管理。
 - 迁移保持同步转存，不会自动启用 Redis 队列。
-- `NetdiskCheckService` 默认开启 TLS 证书和主机名校验；CentOS 可使用 `/etc/pki/tls/certs/ca-bundle.crt`，需配置到 `NETDISK_CA_BUNDLE`。
+- `NetdiskCheckService` 默认开启 TLS 证书和主机名校验；可将证书放在 `data/certs/cacert.pem` 并填写该相对路径。CentOS 也可使用 `/etc/pki/tls/certs/ca-bundle.crt`，Windows 可填写 `C:/certs/cacert.pem`；无论哪种方式，都要确保 PHP-FPM 运行账号可以读取证书文件。
 - 生产错误页只返回固定文案，不展示框架版本、路径、Cookie、请求参数或调用栈。

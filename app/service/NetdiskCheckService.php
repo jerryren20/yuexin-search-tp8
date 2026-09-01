@@ -15,8 +15,7 @@ class NetdiskCheckService
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
-        // 同时支持分组写法 [NETDISK] CA_BUNDLE 和部署系统常用的平铺变量。
-        $caBundle = trim((string) env('NETDISK_CA_BUNDLE', env('netdisk.ca_bundle', '')));
+        $caBundle = getConfiguredCaBundlePath();
         if ($caBundle !== '' && is_file($caBundle) && is_readable($caBundle)) {
             curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
         }
