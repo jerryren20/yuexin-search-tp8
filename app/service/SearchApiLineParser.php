@@ -2,6 +2,8 @@
 
 namespace app\service;
 
+use think\facade\Log;
+
 class SearchApiLineParser
 {
     public function parse($line, $title)
@@ -26,14 +28,15 @@ class SearchApiLineParser
         $headers = $this->normalizeHeaders($headers, $url);
         $params = json_decode($line['fixed_params'] ?? '', true);
         $params = is_array($params) ? $params : [];
+        $isPanSou = strtolower(trim((string)($line['type'] ?? ''))) === 'pansou';
         $imageProxy = '';
-        if (($line['type'] ?? '') === 'pansou' && !empty($params['image_proxy'])) {
+        if ($isPanSou && !empty($params['image_proxy'])) {
             $imageProxy = trim((string)$params['image_proxy']);
             unset($params['image_proxy']);
         }
 
         $params = $this->replaceKeywordRecursive($params, $title);
-        if (($line['type'] ?? '') === 'pansou') {
+        if ($isPanSou) {
             $params['cloud_types'] = [$panType[$type]];
         }
 
@@ -44,33 +47,152 @@ class SearchApiLineParser
             $headerArr[] = 'Content-Type: application/x-www-form-urlencoded';
         }
 
-        $queryParams = $method === 'GET' ? $params : [];
-        if ($method === 'POST' && !empty($params)) {
-            $postData = strpos($contentType, 'application/json') !== false
-                ? json_encode($params, JSON_UNESCAPED_UNICODE)
-                : http_build_query($params);
-            $result = curlHelper($url, $method, $postData, $headerArr, $queryParams);
-        } else {
-            $result = curlHelper($url, $method, $method === 'GET' ? null : $params, $headerArr, $queryParams);
-        }
-
-        if (empty($result['body'])) {
-            return [];
-        }
-
         $fieldMap = json_decode($line['field_map'] ?? '', true);
         $fieldMap = is_array($fieldMap) ? $fieldMap : [];
-        $response = json_decode($result['body'], true);
-        if (!is_array($response)) {
-            return [];
+
+        $firstRequest = $this->requestAndExtractList(
+            $url,
+            $method,
+            $params,
+            $headerArr,
+            $contentType,
+            $fieldMap,
+            $type
+        );
+
+        $list = $firstRequest['list'];
+
+        // 仅当 PanSou 正常返回 data.total=0 时刷新重试一次
+        if (
+            $isPanSou
+            && $firstRequest['total'] === 0
+            && !$this->isRefreshEnabled($params)
+        ) {
+            $retryParams = $params;
+            $retryParams['refresh'] = true;
+
+            Log::info('[PanSou] data.total=0，执行 refresh 重试: keyword=' . $title
+                . ' line=' . ($line['name'] ?? ''));
+
+            $retryRequest = $this->requestAndExtractList(
+                $url,
+                $method,
+                $retryParams,
+                $headerArr,
+                $contentType,
+                $fieldMap,
+                $type
+            );
+
+            $list = $retryRequest['list'];
+
+            Log::info('[PanSou] refresh 重试完成: keyword=' . $title
+                . ' total=' . ($retryRequest['total'] ?? 'unknown')
+                . ' result_count=' . count($list));
         }
 
-        $list = $this->extractList($response, $fieldMap, $type);
         if ($imageProxy !== '') {
             $list = $this->applyImageProxyToList($list, $imageProxy);
         }
 
         return array_slice($list, 0, $maxCount);
+    }
+
+    private function requestAndExtractList(
+        $url,
+        $method,
+        array $params,
+        array $headerArr,
+        $contentType,
+        array $fieldMap,
+        $type
+    ) {
+        $queryParams = $method === 'GET' ? $params : [];
+
+        if ($method === 'POST' && !empty($params)) {
+            $postData = strpos($contentType, 'application/json') !== false
+                ? json_encode($params, JSON_UNESCAPED_UNICODE)
+                : http_build_query($params);
+
+            $result = curlHelper($url, $method, $postData, $headerArr, $queryParams);
+        } else {
+            $result = curlHelper(
+                $url,
+                $method,
+                $method === 'GET' ? null : $params,
+                $headerArr,
+                $queryParams
+            );
+        }
+
+        // 请求错误、空响应时不触发 total=0 重试
+        if (!is_array($result) || !empty($result['error']) || empty($result['body'])) {
+            return [
+                'total' => null,
+                'list' => [],
+            ];
+        }
+
+        $response = json_decode($result['body'], true);
+
+        // JSON 异常时不触发 total=0 重试
+        if (!is_array($response)) {
+            return [
+                'total' => null,
+                'list' => [],
+            ];
+        }
+
+        return [
+            'total' => $this->extractResponseTotal($response),
+            'list' => $this->extractList($response, $fieldMap, $type),
+        ];
+    }
+
+    private function extractResponseTotal(array $response)
+    {
+        if (
+            !isset($response['data'])
+            || !is_array($response['data'])
+            || !array_key_exists('total', $response['data'])
+        ) {
+            return null;
+        }
+
+        $total = $response['data']['total'];
+
+        if (is_int($total) || is_float($total)) {
+            return (int)$total;
+        }
+
+        if (is_string($total) && is_numeric(trim($total))) {
+            return (int)$total;
+        }
+
+        return null;
+    }
+
+    private function isRefreshEnabled(array $params)
+    {
+        if (!array_key_exists('refresh', $params)) {
+            return false;
+        }
+
+        $value = $params['refresh'];
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (int)$value === 1;
+        }
+
+        return in_array(
+            strtolower(trim((string)$value)),
+            ['1', 'true', 'yes', 'on'],
+            true
+        );
     }
 
     private function normalizeHeaders($headers, $url = '')

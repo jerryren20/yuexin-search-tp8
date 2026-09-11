@@ -66,10 +66,10 @@ class Source extends QfShop
         $map[] = ['status', '=', 1];
         $map[] = ['is_delete', '=', 0];
         $map[] = ['source_id', '=', $data['id']];
-        $field = 'source_id as id,source_category_id,title,url,create_time as time,vod_content,vod_pic,is_type';
+        $field = 'source_id as id,source_category_id,title,url,create_time as time,vod_content,vod_pic,is_type,page_views';
         $result = $this->with('category')->where($map)->field($field)->find();
         if(!is_null($result)){
-            $result->inc('page_views')->update();
+            $result->inc('page_views')->save();
             $result['times'] = substr($result['time'], 0, 10);
             $result['url'] = getDisplayResourceUrl($result['url'], $result['is_type']);
 
